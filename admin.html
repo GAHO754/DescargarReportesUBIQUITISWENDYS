@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin | Leads</title>
+  <link rel="stylesheet" href="admin.css" />
+  <!-- Firebase (compat v9) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+</head>
+<body class="layout">
+  <header class="topbar">
+    <div class="left">
+      <h1>Leads</h1>
+      <span id="userEmail" class="muted"></span>
+    </div>
+    <div class="right">
+      <button id="btnExport">Exportar CSV</button>
+      <button id="btnLogout" class="ghost">Salir</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>Filtros</h2>
+      <div class="filters">
+        <div class="filter">
+          <label>Búsqueda (nombre/correo/teléfono)</label>
+          <input id="q" type="text" placeholder="Buscar…" />
+        </div>
+        <div class="filter">
+          <label>Rango de creación</label>
+          <div class="row">
+            <input id="from" type="date" />
+            <span>—</span>
+            <input id="to" type="date" />
+          </div>
+        </div>
+        <div class="filter">
+          <label>Mes de cumpleaños</label>
+          <select id="bmonth">
+            <option value="">Todos</option>
+            <option value="01">Enero</option><option value="02">Febrero</option>
+            <option value="03">Marzo</option><option value="04">Abril</option>
+            <option value="05">Mayo</option><option value="06">Junio</option>
+            <option value="07">Julio</option><option value="08">Agosto</option>
+            <option value="09">Septiembre</option><option value="10">Octubre</option>
+            <option value="11">Noviembre</option><option value="12">Diciembre</option>
+          </select>
+        </div>
+        <div class="filter">
+          <label>&nbsp;</label>
+          <button id="btnApply">Aplicar</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Resultados</h2>
+      <div class="table-wrap">
+        <table id="table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Correo</th>
+              <th>Teléfono</th>
+              <th>Cumpleaños</th>
+              <th>Creado</th>
+              <th>Fuente</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="6" class="muted">Sin datos</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="prevPage" class="ghost">&larr; Anterior</button>
+        <span id="pageInfo" class="muted">Página 1</span>
+        <button id="nextPage" class="ghost">Siguiente &rarr;</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Tu configuración Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyCun-sPsiEJMphATcHHZ_QFU4y_ZcGThYk",
+      authDomain: "wendysunifi.firebaseapp.com",
+      projectId: "wendysunifi",
+      storageBucket: "wendysunifi.firebasestorage.app",
+      messagingSenderId: "507383157033",
+      appId: "1:507383157033:web:24fdab81903e3c5cac6738",
+      measurementId: "G-K6FJVWCEYK"
+    };
+  </script>
+  <script src="admin.js"></script>
+</body>
+</html>
