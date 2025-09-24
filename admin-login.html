@@ -4,16 +4,22 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Admin | Iniciar sesión</title>
-  <link rel="stylesheet" href="admin.css" />
-  <!-- Firebase (compat v9) -->
+  <link rel="icon" type="image/png" sizes="16x16" href="letra-w1.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="letra-w2.png">
+  <link rel="stylesheet" href="admin-login.css" />
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 </head>
-<body class="layout">
-  <main class="card narrow">
-    <h1>Panel Admin</h1>
-    <p class="muted">Accede con tu correo y contraseña</p>
+<body class="login-layout">
+  <main class="login-card">
+    <div class="brand-bar"></div>
+    <div class="head">
+      <img src="Imagen Completa y Bonita.png" alt="Wendy’s" class="logo">
+      <h1>Panel Admin</h1>
+      <p class="muted">Accede con tu correo y contraseña</p>
+    </div>
 
     <form id="loginForm" class="form" novalidate>
       <div class="field">
@@ -30,7 +36,6 @@
   </main>
 
   <script>
-    // Tu configuración Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyCun-sPsiEJMphATcHHZ_QFU4y_ZcGThYk",
       authDomain: "wendysunifi.firebaseapp.com",
@@ -43,10 +48,7 @@
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
-    // Si ya está logueado, mandar al dashboard
-    auth.onAuthStateChanged(user => {
-      if (user) location.replace('admin.html');
-    });
+    auth.onAuthStateChanged(user => { if (user) location.replace('admin.html'); });
 
     const form = document.getElementById('loginForm');
     const statusEl = document.getElementById('status');
@@ -60,13 +62,10 @@
         const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
         await auth.signInWithEmailAndPassword(email, password);
-        // redirige por onAuthStateChanged
       } catch (err) {
         console.error(err);
         statusEl.textContent = 'Error de acceso: ' + (err?.message || '');
-      } finally {
-        btn.disabled = false;
-      }
+      } finally { btn.disabled = false; }
     });
   </script>
 </body>
