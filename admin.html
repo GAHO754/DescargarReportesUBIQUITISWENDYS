@@ -9,6 +9,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="layout">
   <header class="topbar">
@@ -23,6 +25,18 @@
   </header>
 
   <main class="grid">
+    <!-- KPIs -->
+    <section class="card">
+      <h2>Métricas rápidas</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-num" id="kpiTotal">0</div><div class="kpi-label">Leads (filtrados)</div></div>
+        <div class="kpi"><div class="kpi-num" id="kpiNuevos">0</div><div class="kpi-label">Nuevos</div></div>
+        <div class="kpi"><div class="kpi-num" id="kpiRecurrentes">0</div><div class="kpi-label">Recurrentes</div></div>
+        <div class="kpi"><div class="kpi-num" id="kpiVisitas">0</div><div class="kpi-label">Visitas totales</div></div>
+        <div class="kpi"><div class="kpi-num" id="kpiStay">—</div><div class="kpi-label">Permanencia prom. (min)</div></div>
+      </div>
+    </section>
+
     <section class="card">
       <h2>Filtros</h2>
       <div class="filters">
@@ -51,9 +65,32 @@
           </select>
         </div>
         <div class="filter">
+          <label>Unificar duplicados</label>
+          <label class="row"><input id="mergeDup" type="checkbox" /> por email/teléfono</label>
+        </div>
+        <div class="filter">
+          <label>Solo frecuentes</label>
+          <div class="row">
+            <input id="freqN" type="number" min="2" step="1" value="2" style="width:80px" />
+            <span class="muted">&nbsp;visitas o más</span>
+          </div>
+          <label class="row"><input id="onlyFreq" type="checkbox" /> aplicar</label>
+        </div>
+        <div class="filter">
           <label>&nbsp;</label>
           <button id="btnApply">Aplicar</button>
         </div>
+      </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="card">
+      <h2>Gráficas</h2>
+      <div class="charts grid-2">
+        <canvas id="chVisitsByDay" height="140"></canvas>
+        <canvas id="chSources" height="140"></canvas>
+        <canvas id="chNewVsReturn" height="140"></canvas>
+        <canvas id="chBirthMonths" height="140"></canvas>
       </div>
     </section>
 
@@ -69,10 +106,13 @@
               <th>Cumpleaños</th>
               <th>Creado</th>
               <th>Fuente</th>
+              <th>Visitas</th>
+              <th>Última visita</th>
+              <th>Min. última sesión</th>
             </tr>
           </thead>
           <tbody id="tbody">
-            <tr><td colspan="6" class="muted">Sin datos</td></tr>
+            <tr><td colspan="9" class="muted">Sin datos</td></tr>
           </tbody>
         </table>
       </div>
@@ -99,4 +139,3 @@
   <script src="admin.js"></script>
 </body>
 </html>
-
