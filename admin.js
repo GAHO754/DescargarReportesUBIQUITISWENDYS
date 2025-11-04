@@ -155,12 +155,12 @@ async function loadPage(direction = 'forward'){
     }
 
     // Unificar duplicados por email/teléfono (opcional)
-    if (mergeDupEl.checked){
+    if (mergeDupEl?.checked){
       filtered = mergeDuplicates(filtered);
     }
 
     // Solo frecuentes (visitCount >= N)
-    if (onlyFreqEl.checked){
+    if (onlyFreqEl?.checked){
       const N = Math.max(2, parseInt(freqNEl.value || '2', 10));
       filtered = filtered.filter(r => (r.visitCount || 1) >= N);
     }
@@ -253,38 +253,247 @@ function updatePager(hasPrev, hasNext){
 btnNext?.addEventListener('click', () => loadPage('forward'));
 btnPrev?.addEventListener('click', () => loadPage('back'));
 
-/* Exportar CSV (filas mostradas) */
+/* Exportar Excel (.xlsx) con estilo (filas mostradas) */
 btnExport?.addEventListener('click', () => {
   if (!currentRows.length){
     alert('No hay datos para exportar.');
     return;
   }
-  const header = ['Nombre','Correo','Teléfono','Cumpleaños','Creado','Fuente','Visitas','Última visita','Min. última sesión'];
-  const lines = [header.join(',')];
+
+  // ---------- UTILIDADES ----------
+  const toExcelDate = (jsDate) => {
+    if (!jsDate) return null;
+    // Excel date serial number
+    return (jsDate - new Date(Date.UTC(1899, 11, 30))) / (24*60*60*1000);
+  };
+  const safe = (v) => (v == null ? '' : String(v));
+  const phoneFmt = (s) => s.replace(/[^\d]/g,''); // solo dígitos para formato personalizado
+
+  // KPIs rápidos (igual que en panel):
+  const total = currentRows.length;
+  const nuevos = currentRows.filter(r => (r.visitCount || 1) <= 1).length;
+  const recurrentes = total - nuevos;
+  const visitasTotales = currentRows.reduce((s, r) => s + (r.visitCount || 1), 0);
+  const withMinutes = currentRows.filter(r => typeof r.totalMinutes === 'number' && r.totalMinutes > 0);
+  const stayProm = withMinutes.length 
+    ? Math.round(withMinutes.reduce((s,r)=>s+(r.totalMinutes||0),0) / withMinutes.length)
+    : null;
+
+  // Series para Resumen:
+  const byDay = new Map(); // yyyy-mm-dd -> visitas (sumar visitCount)
+  const bySource = new Map();
   for (const r of currentRows){
-    const row = [
-      csvCell(r.fullName),
-      csvCell(r.email),
-      csvCell(r.phone),
-      csvCell(r.birthday),
-      csvCell(r.createdAt ? fmtDateTime(r.createdAt) : ''),
-      csvCell(r.source || 'webform'),
-      csvCell(r.visitCount ?? ''),
-      csvCell(r.lastVisit ? fmtDateTime(r.lastVisit) : ''),
-      csvCell(r.lastSessionMinutes != null ? String(r.lastSessionMinutes) : ''),
-    ].join(',');
-    lines.push(row);
+    const day = r.createdAt ? r.createdAt.toISOString().slice(0,10) : null;
+    if (day) byDay.set(day, (byDay.get(day)||0) + (r.visitCount || 1));
+    const src = (r.source || 'webform').toLowerCase();
+    bySource.set(src, (bySource.get(src)||0) + 1);
   }
-  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
+  const dayEntries = Array.from(byDay.entries()).sort((a,b)=> a[0].localeCompare(b[0]));
+  const srcEntries = Array.from(bySource.entries()).sort((a,b)=> b[1]-a[1]);
+
+  // ---------- HOJA "Leads" ----------
+  const HEAD = [
+    'Nombre','Correo','Teléfono','Cumpleaños','Creado','Fuente',
+    'Visitas','Última visita','Min. última sesión'
+  ];
+
+  // Construimos los datos en formato SheetJS con estilos:
+  const wsData = [HEAD, ...currentRows.map(r => ([
+    safe(r.fullName),
+    safe(r.email),
+    phoneFmt(safe(r.phone)),
+    safe(r.birthday),
+    r.createdAt ? toExcelDate(r.createdAt) : '',
+    safe(r.source || 'webform'),
+    r.visitCount ?? '',
+    r.lastVisit ? toExcelDate(r.lastVisit) : '',
+    (r.lastSessionMinutes != null ? Number(r.lastSessionMinutes) : '')
+  ]))];
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Estilos generales
+  const headerStyle = {
+    font: { bold: true, color: { rgb: "FFFFFFFF" } },
+    fill: { patternType: "solid", fgColor: { rgb: "FFE2202A" } }, // brand red
+    alignment: { horizontal: "center", vertical: "center" }
+  };
+  const zebra1 = { fill: { patternType: "solid", fgColor: { rgb: "FFF6F7F9" } } };
+  const zebra2 = { fill: { patternType: "solid", fgColor: { rgb: "FFFFFFFF" } } };
+  const borderThin = { 
+    top:{style:"thin", color:{rgb:"FFE6EAF2"}},
+    bottom:{style:"thin", color:{rgb:"FFE6EAF2"}},
+    left:{style:"thin", color:{rgb:"FFE6EAF2"}},
+    right:{style:"thin", color:{rgb:"FFE6EAF2"}}
+  };
+
+  // Anchos de columna
+  ws['!cols'] = [
+    { wch: 28 }, // Nombre
+    { wch: 28 }, // Correo
+    { wch: 14 }, // Teléfono
+    { wch: 12 }, // Cumpleaños
+    { wch: 18 }, // Creado
+    { wch: 14 }, // Fuente
+    { wch: 10 }, // Visitas
+    { wch: 18 }, // Última visita
+    { wch: 18 }  // Min. última sesión
+  ];
+
+  // Altura de encabezado + freeze top row
+  ws['!rows'] = [{ hpt: 24 }];
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  // Auto-filtro
+  const endRow = wsData.length;
+  const endCol = HEAD.length - 1;
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s:{r:0,c:0}, e:{r:endRow-1, c:endCol} }) };
+
+  // Aplicar estilos celda por celda
+  // Encabezado
+  for (let c = 0; c < HEAD.length; c++){
+    const addr = XLSX.utils.encode_cell({r:0, c});
+    ws[addr].s = { ...headerStyle, border: borderThin };
+  }
+
+  // Cuerpo
+  for (let r = 1; r < wsData.length; r++){
+    const rowStyle = (r % 2 === 1) ? zebra1 : zebra2;
+    for (let c = 0; c < HEAD.length; c++){
+      const addr = XLSX.utils.encode_cell({r, c});
+      ws[addr] = ws[addr] || { t:'s', v:'' };
+      ws[addr].s = { ...rowStyle, border: borderThin };
+      // Formatos por columna
+      if (c === 2) { // Teléfono
+        ws[addr].z = '00000000000'; // 11 dígitos; ajusta según tu país
+      }
+      if (c === 4 || c === 7) { // Fechas Excel
+        if (typeof ws[addr].v === 'number') {
+          ws[addr].t = 'n';
+          ws[addr].z = 'yyyy-mm-dd hh:mm';
+        }
+      }
+      if (c === 6 || c === 8) { // numéricos
+        if (ws[addr].v !== '') {
+          ws[addr].t = 'n';
+        }
+      }
+      if (c === 1 && ws[addr].v) { // Email con estilo subrayado (simulación de link)
+        ws[addr].s = { 
+          ...ws[addr].s, 
+          font: { underline: true, color: { rgb: "FF1264D1" } }
+        };
+        // Hyperlink (mailto)
+        ws[addr].l = { Target: `mailto:${ws[addr].v}` };
+      }
+    }
+  }
+
+  // ---------- HOJA "Resumen" ----------
+  const res = [
+    ['REPORTE DE LEADS', null, null, null],
+    [null,null,null,null],
+    ['KPI', 'Valor', null, null],
+    ['Leads (filtrados)', total, null, null],
+    ['Nuevos', nuevos, null, null],
+    ['Recurrentes', recurrentes, null, null],
+    ['Visitas totales', visitasTotales, null, null],
+    ['Permanencia prom. (min)', (stayProm != null ? stayProm : '—'), null, null],
+    [null,null,null,null],
+    ['Visitas por día', null, null, null],
+    ...Array.from(dayEntries, ([d,v]) => [d, v, null, null]),
+    [null,null,null,null],
+    ['Leads por fuente', null, null, null],
+    ...Array.from(srcEntries, ([src, n]) => [src, n, null, null]),
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(res);
+
+  // Estilos Resumen
+  ws2['!cols'] = [{wch:28},{wch:16},{wch:12},{wch:12}];
+  ws2['!rows'] = [
+    { hpt: 28 }, // título
+  ];
+
+  const borderThin = { 
+    top:{style:"thin", color:{rgb:"FFE6EAF2"}},
+    bottom:{style:"thin", color:{rgb:"FFE6EAF2"}},
+    left:{style:"thin", color:{rgb:"FFE6EAF2"}},
+    right:{style:"thin", color:{rgb:"FFE6EAF2"}}
+  };
+  const zebra1 = { fill: { patternType: "solid", fgColor: { rgb: "FFF6F7F9" } } };
+  const zebra2 = { fill: { patternType: "solid", fgColor: { rgb: "FFFFFFFF" } } };
+
+  const titleCell = 'A1';
+  ws2[titleCell].s = {
+    font: { bold: true, sz: 16, color: {rgb:"FFFFFFFF"} },
+    fill: { patternType: "solid", fgColor: { rgb: "FF131A2A" } },
+    alignment: { horizontal: "left", vertical: "center" }
+  };
+  // Encabezados KPI
+  ws2['A3'].s = {
+    font: { bold: true, color: { rgb: "FFFFFFFF" } },
+    fill: { patternType: "solid", fgColor: { rgb: "FFE2202A" } },
+    alignment: { horizontal: "center" },
+    border: borderThin
+  };
+  ws2['B3'].s = ws2['A3'].s;
+
+  // Zebra en KPI
+  for (let r = 4; r <= 7; r++){
+    const zebra = (r % 2 === 0) ? zebra1 : zebra2;
+    ws2[`A${r}`].s = { ...zebra, border: borderThin };
+    ws2[`B${r}`].s = { ...zebra, border: borderThin };
+    if (r !== 7) ws2[`B${r}`].t = 'n';
+  }
+
+  // “Visitas por día”
+  const startVisitsRow = 10; // A10
+  ws2[`A9`] = ws2[`A9`] || { t:'s', v:'Visitas por día' };
+  ws2[`A9`].s = {
+    font: { bold: true }, fill: { patternType:"solid", fgColor:{rgb:"FFF0F2F7"} }, border: borderThin
+  };
+  if (dayEntries.length){
+    ws2[`A${startVisitsRow}`] = { t:'s', v:'Día', s:{
+      font:{bold:true, color:{rgb:"FFFFFFFF"}}, fill:{patternType:"solid", fgColor:{rgb:"FFE2202A"}}, alignment:{horizontal:"center"}, border:borderThin
+    }};
+    ws2[`B${startVisitsRow}`] = { t:'s', v:'Visitas', s:{
+      font:{bold:true, color:{rgb:"FFFFFFFF"}}, fill:{patternType:"solid", fgColor:{rgb:"FFE2202A"}}, alignment:{horizontal:"center"}, border:borderThin
+    }};
+    for (let i=0;i<dayEntries.length;i++){
+      const r = startVisitsRow + 1 + i;
+      const zebra = (i % 2 === 0) ? zebra1 : zebra2;
+      ws2[`A${r}`] = ws2[`A${r}`] || { t:'s', v:dayEntries[i][0] };
+      ws2[`B${r}`] = ws2[`B${r}`] || { t:'n', v:dayEntries[i][1] };
+      ws2[`A${r}`].s = { ...zebra, border: borderThin };
+      ws2[`B${r}`].s = { ...zebra, border: borderThin };
+    }
+  }
+
+  // “Leads por fuente”
+  const startSrcRow = startVisitsRow + Math.max(2, dayEntries.length + 3);
+  ws2[`A${startSrcRow-1}`] = { t:'s', v:'Leads por fuente', s:{
+    font:{bold:true}, fill:{patternType:"solid", fgColor:{rgb:"FFF0F2F7"}}, border:borderThin
+  }};
+  ws2[`A${startSrcRow}`] = { t:'s', v:'Fuente', s:{
+    font:{bold:true, color:{rgb:"FFFFFFFF"}}, fill:{patternType:"solid", fgColor:{rgb:"FFE2202A"}}, alignment:{horizontal:"center"}, border:borderThin
+  }};
+  ws2[`B${startSrcRow}`] = { t:'s', v:'Leads', s:{
+    font:{bold:true, color:{rgb:"FFFFFFFF"}}, fill:{patternType:"solid", fgColor:{rgb:"FFE2202A"}}, alignment:{horizontal:"center"}, border:borderThin
+  }};
+  for (let i=0;i<srcEntries.length;i++){
+    const r = startSrcRow + 1 + i;
+    const zebra = (i % 2 === 0) ? zebra1 : zebra2;
+    ws2[`A${r}`] = { t:'s', v:srcEntries[i][0], s:{ ...zebra, border: borderThin } };
+    ws2[`B${r}`] = { t:'n', v:srcEntries[i][1], s:{ ...zebra, border: borderThin } };
+  }
+
+  // ---------- LIBRO Y DESCARGA ----------
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws2, 'Resumen');
+  XLSX.utils.book_append_sheet(wb, ws,  'Leads');
+
   const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-  a.download = `leads_${ts}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  URL.revokeObjectURL(url);
-  a.remove();
+  XLSX.writeFile(wb, `Leads_${ts}.xlsx`, { compression: true });
 });
 
 /* KPIs + Charts */
@@ -383,11 +592,6 @@ function fmtDateTime(d){
 }
 function escapeHtml(s){
   return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
-}
-function csvCell(s){
-  const v = String(s ?? '');
-  if (/[",\n]/.test(v)) return `"${v.replace(/"/g,'""')}"`;
-  return v;
 }
 function setLoading(x){
   document.body.style.cursor = x ? 'progress' : 'default';
